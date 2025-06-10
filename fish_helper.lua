@@ -49,6 +49,7 @@ local cfg = {
     sell_treshold_in_perc = 80,
     informative_catching = false,
     pick_fish_net = false,
+    hunting = false,
     grib_eat = false
   }
 }
@@ -120,10 +121,12 @@ function doFishing()
   local fishing_float = { id = -1, y = -1 }
   local fish = { id = -1, y = -1 }
   local netting = { net_id = -1, fish_id = -1 }
+  local hunting = { animal_id = -1, point_id = -1 }
   for i = 0, 2500 do
     if sampTextdrawIsExists(i) then
       local x, y = sampTextdrawGetPos(i)
-      if string.find(sampTextdrawGetString(i), "CATCHING") and x == catchingCoord.x and y == catchingCoord.y then
+      local text = sampTextdrawGetString(i)
+      if string.find(text, "CATCHING") and x == catchingCoord.x and y == catchingCoord.y then
         sendKey(1024) -- нажать левый alt
         break
       end
@@ -135,6 +138,13 @@ function doFishing()
           netting.fish_id = i -- ид рыбы в сет€х
         elseif model == 2945 and x == 228 and y == 117 then
           netting.net_id = i -- ид сетей
+        end
+      end
+      if cfg.settings.hunting then
+        if (model == 19315 or model == 19833) and (x == 232 and y == 203) then
+          hunting.animal_id = i -- ид животного
+        elseif text == 'ld_beat:chit' and color == 4294967295 then
+          hunting.point_id = i -- ид точки
         end
       end
       if color == 2685694719 and x == 422 then -- поплавок найден
@@ -155,6 +165,9 @@ function doFishing()
   end
   if netting.net_id ~= -1 and netting.fish_id ~= -1 then
     sampSendClickTextdraw(netting.fish_id) -- кликнуть по рыбе в сет€х
+  end
+  if hunting.animal_id ~= -1 and hunting.point_id ~= -1 then
+    sampSendClickTextdraw(hunting.point_id) -- кликнуть по точке на животном
   end
 end
 
@@ -189,12 +202,13 @@ end
 function imgui.OnDrawFrame()
   local sw, sh = getScreenResolution()
   local window_width = 250
-  local window_height = 320
+  local window_height = 360
 
   local checkbox_sell_fish = imgui.ImBool(cfg.settings.sell_fish_helper)
   local sell_treshold_in_perc = imgui.ImInt(cfg.settings.sell_treshold_in_perc)
   local checkbox_informative_catching = imgui.ImBool(cfg.settings.informative_catching)
   local checkbox_pick_fish_net = imgui.ImBool(cfg.settings.pick_fish_net)
+  local checkbox_hunting = imgui.ImBool(cfg.settings.hunting)
   local checkbox_grib_eat = imgui.ImBool(cfg.settings.grib_eat)
 
   imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
@@ -222,9 +236,13 @@ function imgui.OnDrawFrame()
   imgui.SameLine()
   ShowHelpMarker("«амен€ет стандартное сообщение при ловле рыбы на более информативное")
   imgui.NewLine()
-  if imgui.Checkbox(u8("—обирать рыбу из сетей"), checkbox_pick_fish_net) then cfg.settings.pick_fish_net = checkbox_pick_fish_net.v saveCFG(cfg, CONFIG_PATH) end
+  if imgui.Checkbox(u8(" ликер дл€ сетей"), checkbox_pick_fish_net) then cfg.settings.pick_fish_net = checkbox_pick_fish_net.v saveCFG(cfg, CONFIG_PATH) end
   imgui.SameLine()
   ShowHelpMarker("јвтоматически кликает по рыбе при сборе сетей")
+  imgui.NewLine()
+  if imgui.Checkbox(u8(" ликер дл€ охоты"), checkbox_hunting) then cfg.settings.hunting = checkbox_hunting.v saveCFG(cfg, CONFIG_PATH) end
+  imgui.SameLine()
+  ShowHelpMarker("јвтоматически кликает по точкам при свежевании животного")
   imgui.NewLine()
   if imgui.Checkbox(u8("ѕоедание грибов"), checkbox_grib_eat) then cfg.settings.grib_eat = checkbox_grib_eat.v saveCFG(cfg, CONFIG_PATH) end
   imgui.SameLine()
