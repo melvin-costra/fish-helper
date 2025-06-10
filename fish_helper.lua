@@ -119,6 +119,7 @@ end
 function doFishing()
   local fishing_float = { id = -1, y = -1 }
   local fish = { id = -1, y = -1 }
+  local netting = { net_id = -1, fish_id = -1 }
   for i = 0, 2500 do
     if sampTextdrawIsExists(i) then
       local x, y = sampTextdrawGetPos(i)
@@ -129,8 +130,12 @@ function doFishing()
       x, y = math.ceil(x), math.ceil(y)
       local _, _, color = sampTextdrawGetLetterSizeAndColor(i)
       local model = select(1, sampTextdrawGetModelRotationZoomVehColor(i))
-      if cfg.settings.pick_fish_net and (model == 1600 or model == 1599 or model == 1604 or model == 19630) then
-        sampSendClickTextdraw(i) -- собрать рыбу из сетей
+      if cfg.settings.pick_fish_net then
+        if model == 1600 or model == 1599 or model == 1604 or model == 19630 then
+          netting.fish_id = i -- ид рыбы в сетях
+        elseif model == 2945 and x == 228 and y == 117 then
+          netting.net_id = i -- ид сетей
+        end
       end
       if color == 2685694719 and x == 422 then -- поплавок найден
         fishing_float.id = i
@@ -147,6 +152,9 @@ function doFishing()
     if fishing_float.y > fish.y then
       setGameKeyState(16, 255) -- нажимать пробел
     end
+  end
+  if netting.net_id ~= -1 and netting.fish_id ~= -1 then
+    sampSendClickTextdraw(netting.fish_id) -- кликнуть по рыбе в сетях
   end
 end
 
