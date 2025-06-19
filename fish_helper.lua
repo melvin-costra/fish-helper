@@ -1,6 +1,6 @@
 script_author("Melvin Costra")
 script_name("Fish helper")
-script_version("v1.0.0")
+script_version("v1.2.1")
 script_url("https://github.com/melvin-costra/fish-helper.git")
 
 ------------------------------------ Libs  ------------------------------------
@@ -50,7 +50,8 @@ local cfg = {
     informative_catching = false,
     pick_fish_net = false,
     hunting = false,
-    grib_eat = false
+    grib_eat = false,
+    clicker_delay = 200,
   }
 }
 
@@ -163,11 +164,13 @@ function doFishing()
       setGameKeyState(16, 255) -- нажимать пробел
     end
   end
-  if netting.net_id ~= -1 and netting.fish_id ~= -1 then
-    sampSendClickTextdraw(netting.fish_id) -- кликнуть по рыбе в сетях
-  end
-  if hunting.animal_id ~= -1 and hunting.point_id ~= -1 then
-    sampSendClickTextdraw(hunting.point_id) -- кликнуть по точке на животном
+  if os.clock() * 1000 - antiflood > cfg.settings.clicker_delay then
+    if netting.net_id ~= -1 and netting.fish_id ~= -1 then
+      clickTextdraw(netting.fish_id) -- кликнуть по рыбе в сетях
+    end
+    if hunting.animal_id ~= -1 and hunting.point_id ~= -1 then
+      clickTextdraw(hunting.point_id) -- кликнуть по точке на животном
+    end
   end
 end
 
@@ -201,8 +204,8 @@ end
 ------------------------------------ Imgui  ------------------------------------
 function imgui.OnDrawFrame()
   local sw, sh = getScreenResolution()
-  local window_width = 250
-  local window_height = 360
+  local window_width = 260
+  local window_height = 400
 
   local checkbox_sell_fish = imgui.ImBool(cfg.settings.sell_fish_helper)
   local sell_treshold_in_perc = imgui.ImInt(cfg.settings.sell_treshold_in_perc)
@@ -210,6 +213,7 @@ function imgui.OnDrawFrame()
   local checkbox_pick_fish_net = imgui.ImBool(cfg.settings.pick_fish_net)
   local checkbox_hunting = imgui.ImBool(cfg.settings.hunting)
   local checkbox_grib_eat = imgui.ImBool(cfg.settings.grib_eat)
+  local input_delay = imgui.ImInt(cfg.settings.clicker_delay)
 
   imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
   imgui.SetNextWindowSize(imgui.ImVec2(window_width, window_height), imgui.Cond.FirstUseEver)
@@ -250,6 +254,10 @@ function imgui.OnDrawFrame()
   imgui.NewLine()
 
   imgui.Separator()
+  imgui.NewLine()
+  imgui.PushItemWidth(100)
+  if imgui.InputInt(u8"Задержка кликеров (мс)", input_delay, 50) then cfg.settings.clicker_delay = input_delay.v saveCFG(cfg, CONFIG_PATH) end
+  imgui.PopItemWidth()
   imgui.NewLine()
   if imgui.Button(u8("Информация о рыбе")) then showFishInfo() end
 
@@ -376,10 +384,15 @@ function escape_string(str)
   end)
 end
 
+function clickTextdraw(textdrawId)
+    sampSendClickTextdraw(textdrawId)
+    antiflood = os.clock() * 1000
+end
+
 ------------------------------------ Events  ------------------------------------
 function ev.onServerMessage(c, text)
   if text == " Не флуди!" or text == " В AFK ввод команд заблокирован" then
-    antiflood = os.clock() * 1000 + 1500
+    antiflood = os.clock() * 1000 + 1100
 	end
   if text == " У вас нет этой еды" then
     cfg.settings.grib_eat = false
