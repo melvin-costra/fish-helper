@@ -1,14 +1,14 @@
-script_author("Melvin Costra")
+script_author("melvin-costra (vovka8101)")
 script_name("Fish helper")
-script_version("v1.2.1")
+script_version("v1.2.2")
 script_url("https://github.com/melvin-costra/fish-helper.git")
 
 ------------------------------------ Libs  ------------------------------------
 local ev = require "samp.events"
-local imgui       = require 'imgui'
-local encoding    = require 'encoding'
-encoding.default  = 'CP1251'
-u8                = encoding.UTF8
+local imgui = require 'imgui'
+local encoding = require 'encoding'
+encoding.default = 'CP1251'
+u8 = encoding.UTF8
 require "lib.moonloader"
 
 ------------------------------------ Variables  ------------------------------------
@@ -33,12 +33,13 @@ local cfg = {
     ["Барабулька"] = { min_price = 6306, max_price = 8820, location = loc.ocean, time = "с 06:00 до 19:00" },
     ["Угорь"] = { min_price = 655, max_price = 1192, location = loc.ocean, time = "с 16:00 до 06:00" },
     ["Кальмар"] = { min_price = 678, max_price = 1261, location = loc.ocean, time = "с 18:00 до 06:00" },
-	  ["Осьминог"] = { min_price = 943, max_price = 1212, location = loc.ocean, time = "с 06:00 до 08:00" },
+	  ["Осьминог"] = { min_price = 783, max_price = 1281, location = loc.ocean, time = "с 06:00 до 08:00" },
     ["Морской огурец"] = { min_price = 240, max_price = 483, location = loc.ocean, time = "с 06:00 до 19:00" },
-    ["Мелкая камбала"] = { min_price = 317, max_price = 522, location = loc.ocean, time = "с 06:00 до 20:00" },
+    ["Мелкая камбала"] = { min_price = 308, max_price = 535, location = loc.ocean, time = "с 06:00 до 20:00" },
     ["Рыба-еж"] = { min_price = 709, max_price = 1284, location = loc.ocean, time = "с 12:00 до 16:00" },
-    ["Анчоус"] = { min_price = 161, max_price = 396, location = loc.ocean, time = "Любое время" },
-    ["Щука"] = { min_price = 421, max_price = 660, location = loc.mountain, time = "Любое время" },
+	  ["Сардина"] = { min_price = 250, max_price = 320, location = loc.ocean, time = "с 06:00 до 19:00 (сети)" },
+    ["Анчоус"] = { min_price = 161, max_price = 397, location = loc.ocean, time = "Любое время" },
+    ["Щука"] = { min_price = 421, max_price = 666, location = loc.mountain, time = "Любое время" },
     ["Сельдь"] = { min_price = 133, max_price = 378, location = loc.ocean, time = "Любое время" },
     ["Тигровая форель"] = { min_price = 440, max_price = 657, location = loc.lowland, time = "с 06:00 до 19:00" },
     ["Голавль"] = { min_price = 183, max_price = 425, location = loc.mountain, time = "Любое время" },
@@ -57,22 +58,22 @@ local cfg = {
 
 function checkSavedCFG(savedCFG)
   if savedCFG.settings == nil and savedCFG.fish == nil then
-      return false
+    return false
   end
   local count1, count2 = 0, 0
   for key in pairs(cfg.settings) do
-      if savedCFG.settings[key] == nil then
-          return false
-      end
-      count1 = count1 + 1
+    if savedCFG.settings[key] == nil then
+      return false
+    end
+    count1 = count1 + 1
   end
   for key in pairs(cfg.fish) do
-      if savedCFG.fish[key] == nil then
-          return false
-      end
+    if savedCFG.fish[key] == nil then
+      return false
+    end
   end
   for key in pairs(savedCFG.settings) do
-      count2 = count2 + 1
+    count2 = count2 + 1
   end
   return count1 == count2
 end
@@ -80,8 +81,8 @@ end
 function saveCFG(table, path)
   local save = io.open(path, "w")
   if save then
-      save:write(encodeJson(table))
-      save:close()
+    save:write(encodeJson(table))
+    save:close()
   end
 end
 
@@ -195,7 +196,7 @@ function doGribEat()
     elseif isSendGribEat and tonumber(satiety) >= 50 then
       isSendGribEat = false
     end
-    if isSendGribEat and (os.clock() * 1000) - antiflood > 200 then
+    if isSendGribEat and (os.clock() * 1000) - antiflood > 1000 then
       sampSendChat("/grib eat")
     end
   end
@@ -204,7 +205,7 @@ end
 ------------------------------------ Imgui  ------------------------------------
 function imgui.OnDrawFrame()
   local sw, sh = getScreenResolution()
-  local window_width = 260
+  local window_width = 270
   local window_height = 400
 
   local checkbox_sell_fish = imgui.ImBool(cfg.settings.sell_fish_helper)
@@ -218,13 +219,10 @@ function imgui.OnDrawFrame()
   imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
   imgui.SetNextWindowSize(imgui.ImVec2(window_width, window_height), imgui.Cond.FirstUseEver)
 
-  imgui.Begin("Fish helper", window, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove)
+  imgui.Begin("Fish helper by melvin-costra (vovka8101)", window, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove)
 
-  if imgui.Button(u8("Вкл/Выкл")) then
-    cfg.settings.enabled = not cfg.settings.enabled
-    saveCFG(cfg, CONFIG_PATH)
-  end
-  imgui.SameLine(130)
+  if imgui.Button(u8("Вкл/Выкл")) then toggleScriptActivation() end
+  imgui.SameLine(150)
   imgui.TextColoredRGB("Статус: " .. (cfg.settings.enabled and "{00B200}Включен" or "{FF0F00}Выключен"))
   imgui.NewLine()
   if imgui.Checkbox(u8("Помощник продажи"), checkbox_sell_fish) then cfg.settings.sell_fish_helper = checkbox_sell_fish.v saveCFG(cfg, CONFIG_PATH) end
@@ -323,6 +321,11 @@ function imgui.TextColoredRGB(text)
 end
 
 ------------------------------------ Utils  ------------------------------------
+function toggleScriptActivation()
+  cfg.settings.enabled = not cfg.settings.enabled
+  saveCFG(cfg, CONFIG_PATH)
+end
+
 function sendKey(key)
   local _, myId = sampGetPlayerIdByCharHandle(PLAYER_PED)
   local data = allocateMemory(68)
@@ -392,7 +395,7 @@ end
 ------------------------------------ Events  ------------------------------------
 function ev.onServerMessage(c, text)
   if text == " Не флуди!" or text == " В AFK ввод команд заблокирован" then
-    antiflood = os.clock() * 1000 + 1100
+    antiflood = os.clock() * 1000 + 1500
 	end
   if text == " У вас нет этой еды" then
     cfg.settings.grib_eat = false
