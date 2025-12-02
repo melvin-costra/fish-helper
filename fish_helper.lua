@@ -1,6 +1,6 @@
 script_author("melvin-costra (vovka8101)")
 script_name("Fish helper")
-script_version("v1.2.2")
+script_version("v1.2.3")
 script_url("https://github.com/melvin-costra/fish-helper.git")
 
 ------------------------------------ Libs  ------------------------------------
@@ -16,7 +16,7 @@ local window = imgui.ImBool(false)
 local CONFIG_PATH = "moonloader/config/configFish.json"
 local catchingCoord = { x = 320, y = 100 }
 local satiety, antiflood = -1, os.clock() * 1000
-local isSendGribEat = false
+local isEating = false
 local loc = { ocean = "Океан", lowland = "Равнинные реки", mountain = "Горные реки" }
 
 ------------------------------------ Settings  ------------------------------------
@@ -113,7 +113,7 @@ function main()
     imgui.Process = window.v
     if cfg.settings.enabled then
       doFishing()
-      doGribEat()
+      doEating()
     end
 	end
 end
@@ -135,6 +135,14 @@ function doFishing()
       x, y = math.ceil(x), math.ceil(y)
       local _, _, color = sampTextdrawGetLetterSizeAndColor(i)
       local model = select(1, sampTextdrawGetModelRotationZoomVehColor(i))
+      if color == 2685694719 and x == 422 then -- поплавок найден
+        fishing_float.id = i
+        fishing_float.y = y
+      end
+      if color == 4278190080 and x == 420 then -- рыба найдена
+        fish.id = i
+        fish.y = y
+      end
       if cfg.settings.pick_fish_net then
         if model == 1600 or model == 1599 or model == 1604 or model == 19630 then
           netting.fish_id = i -- ид рыбы в сетях
@@ -148,14 +156,6 @@ function doFishing()
         elseif text == 'ld_beat:chit' and color == 4294967295 then
           hunting.point_id = i -- ид точки
         end
-      end
-      if color == 2685694719 and x == 422 then -- поплавок найден
-        fishing_float.id = i
-        fishing_float.y = y
-      end
-      if color == 4278190080 and x == 420 then -- рыба найдена
-        fish.id = i
-        fish.y = y
       end
     end
   end
@@ -175,7 +175,7 @@ function doFishing()
   end
 end
 
-function doGribEat()
+function doEating()
   if not cfg.settings.grib_eat then return end
   if IDsatietyTextdraw == nil then
     for i = 0, 2500 do
@@ -191,13 +191,21 @@ function doGribEat()
     end
   end
   if not sampIsDialogActive() and not sampIsChatInputActive() then
-    if not isSendGribEat and tonumber(satiety) == 0 then
-      isSendGribEat = true
-    elseif isSendGribEat and tonumber(satiety) >= 50 then
-      isSendGribEat = false
+    if not isEating and tonumber(satiety) == 0 then
+      isEating = true
+    elseif isEating and tonumber(satiety) >= 50 then
+      isEating = false
     end
-    if isSendGribEat and (os.clock() * 1000) - antiflood > 1000 then
-      sampSendChat("/grib eat")
+    if isEating then
+      printStringNow("~y~Eating... Press ~b~~h~R ~y~to stop", 100)
+      if isKeyJustPressed(VK_R) then
+        isEating = false
+        cfg.settings.grib_eat = false
+        printStringNow("", 10)
+      end
+      if (os.clock() * 1000) - antiflood > 1000 then
+        sampSendChat("/grib eat")
+      end
     end
   end
 end
@@ -391,7 +399,6 @@ function clickTextdraw(textdrawId)
     sampSendClickTextdraw(textdrawId)
     antiflood = os.clock() * 1000
 end
-
 ------------------------------------ Events  ------------------------------------
 function ev.onServerMessage(c, text)
   if text == " Не флуди!" or text == " В AFK ввод команд заблокирован" then
