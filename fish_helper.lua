@@ -1,6 +1,6 @@
-script_author("melvin-costra (vovka8101)")
+script_author("melvin-costra")
 script_name("Fish helper")
-script_version("v1.2.3")
+script_version("27.01.2026")
 script_url("https://github.com/melvin-costra/fish-helper.git")
 
 ------------------------------------ Libs  ------------------------------------
@@ -18,40 +18,43 @@ local catchingCoord = { x = 320, y = 100 }
 local satiety, antiflood = -1, os.clock() * 1000
 local isEating = false
 local loc = { ocean = "Океан", lowland = "Равнинные реки", mountain = "Горные реки" }
+local sampObject = { deer = 19315, cow = 19833 }
+local animalBlips = {} -- [objectId] = blip
+local fishForSell = { name = nil, price = nil, amount = nil, isSelling = false }
 
 ------------------------------------ Settings  ------------------------------------
 local cfg = {
   fish = {
-    ["Малоротый окунь"] = { min_price = 145, max_price = 380, location = loc.lowland, time = "Любое время" },
-    ["Радужная форель"] = { min_price = 258, max_price = 501, location = loc.mountain, time = "с 06:00 до 19:00" },
-    ["Лосось"] = { min_price = 339, max_price = 569, location = loc.lowland, time = "с 06:00 до 19:00" },
-    ["Карп"] = { min_price = 114, max_price = 297, location = loc.mountain, time = "Любое время" },
-    ["Сом"] = { min_price = 652, max_price = 1010, location = loc.lowland, time = "Любое время" },
-    ["Тунец"] = { min_price = 674, max_price = 1179, location = loc.ocean, time = "с 06:00 до 19:00" },
-    ["Лещ"] = { min_price = 180, max_price = 416, location = loc.lowland, time = "с 18:00 до 06:00" },
+    ["Малоротый окунь"] = { min_price = 136, max_price = 380, location = loc.lowland, time = "Любое время" },
+    ["Радужная форель"] = { min_price = 258, max_price = 509, location = loc.mountain, time = "с 06:00 до 19:00" },
+    ["Лосось"] = { min_price = 327, max_price = 581, location = loc.lowland, time = "с 06:00 до 19:00" },
+    ["Карп"] = { min_price = 114, max_price = 302, location = loc.mountain, time = "Любое время" },
+    ["Сом"] = { min_price = 652, max_price = 1036, location = loc.lowland, time = "Любое время" },
+    ["Тунец"] = { min_price = 657, max_price = 1227, location = loc.ocean, time = "с 06:00 до 19:00" },
+    ["Лещ"] = { min_price = 175, max_price = 426, location = loc.lowland, time = "с 18:00 до 06:00" },
     ["Желтый судак"] = { min_price = 261, max_price = 512, location = loc.mountain, time = "с 12:00 до 06:00" },
-    ["Барабулька"] = { min_price = 6306, max_price = 8820, location = loc.ocean, time = "с 06:00 до 19:00" },
-    ["Угорь"] = { min_price = 655, max_price = 1192, location = loc.ocean, time = "с 16:00 до 06:00" },
-    ["Кальмар"] = { min_price = 678, max_price = 1261, location = loc.ocean, time = "с 18:00 до 06:00" },
+    ["Барабулька"] = { min_price = 6250, max_price = 8823, location = loc.ocean, time = "с 06:00 до 19:00" },
+    ["Угорь"] = { min_price = 634, max_price = 1215, location = loc.ocean, time = "с 16:00 до 06:00" },
+    ["Кальмар"] = { min_price = 672, max_price = 1290, location = loc.ocean, time = "с 18:00 до 06:00" },
 	  ["Осьминог"] = { min_price = 783, max_price = 1281, location = loc.ocean, time = "с 06:00 до 08:00" },
-    ["Морской огурец"] = { min_price = 240, max_price = 483, location = loc.ocean, time = "с 06:00 до 19:00" },
-    ["Мелкая камбала"] = { min_price = 308, max_price = 535, location = loc.ocean, time = "с 06:00 до 20:00" },
-    ["Рыба-еж"] = { min_price = 709, max_price = 1284, location = loc.ocean, time = "с 12:00 до 16:00" },
-	  ["Сардина"] = { min_price = 250, max_price = 320, location = loc.ocean, time = "с 06:00 до 19:00 (сети)" },
-    ["Анчоус"] = { min_price = 161, max_price = 397, location = loc.ocean, time = "Любое время" },
-    ["Щука"] = { min_price = 421, max_price = 666, location = loc.mountain, time = "Любое время" },
-    ["Сельдь"] = { min_price = 133, max_price = 378, location = loc.ocean, time = "Любое время" },
-    ["Тигровая форель"] = { min_price = 440, max_price = 657, location = loc.lowland, time = "с 06:00 до 19:00" },
-    ["Голавль"] = { min_price = 183, max_price = 425, location = loc.mountain, time = "Любое время" },
+    ["Морской огурец"] = { min_price = 239, max_price = 483, location = loc.ocean, time = "с 06:00 до 19:00" },
+    ["Мелкая камбала"] = { min_price = 296, max_price = 543, location = loc.ocean, time = "с 06:00 до 20:00" },
+    ["Рыба-еж"] = { min_price = 708, max_price = 1319, location = loc.ocean, time = "с 12:00 до 16:00" },
+	  ["Сардина"] = { min_price = 161, max_price = 409, location = loc.ocean, time = "с 06:00 до 19:00 (сети)" },
+    ["Анчоус"] = { min_price = 161, max_price = 404, location = loc.ocean, time = "Любое время" },
+    ["Щука"] = { min_price = 421, max_price = 668, location = loc.mountain, time = "Любое время" },
+    ["Сельдь"] = { min_price = 131, max_price = 378, location = loc.ocean, time = "Любое время" },
+    ["Тигровая форель"] = { min_price = 422, max_price = 660, location = loc.lowland, time = "с 06:00 до 19:00" },
+    ["Голавль"] = { min_price = 176, max_price = 425, location = loc.mountain, time = "Любое время" },
   },
   settings = {
     enabled = false,
-    sell_fish_helper = false,
-    sell_treshold_in_perc = 80,
-    informative_catching = false,
-    pick_fish_net = false,
-    hunting = false,
-    grib_eat = false,
+    auto_sell = true,
+    sell_treshold_in_perc = 90,
+    pick_fish_net = true,
+    hunting = true,
+    animal_markers = true,
+    grib_eat = true,
     clicker_delay = 200,
   }
 }
@@ -112,14 +115,16 @@ function main()
 		wait(0)
     imgui.Process = window.v
     if cfg.settings.enabled then
-      doFishing()
-      doEating()
+      fishing()
+      eating()
+      updateAnimalMarkers()
+      selling()
     end
 	end
 end
 
 ------------------------------------ Fishing  ------------------------------------
-function doFishing()
+function fishing()
   local fishing_float = { id = -1, y = -1 }
   local fish = { id = -1, y = -1 }
   local netting = { net_id = -1, fish_id = -1 }
@@ -151,7 +156,7 @@ function doFishing()
         end
       end
       if cfg.settings.hunting then
-        if (model == 19315 or model == 19833) and (x == 232 and y == 203) then
+        if (model == sampObject.deer or model == sampObject.cow) and (x == 232 and y == 203) then
           hunting.animal_id = i -- ид животного
         elseif text == 'ld_beat:chit' and color == 4294967295 then
           hunting.point_id = i -- ид точки
@@ -175,7 +180,7 @@ function doFishing()
   end
 end
 
-function doEating()
+function eating()
   if not cfg.settings.grib_eat then return end
   if IDsatietyTextdraw == nil then
     for i = 0, 2500 do
@@ -190,7 +195,7 @@ function doEating()
       end
     end
   end
-  if not sampIsDialogActive() and not sampIsChatInputActive() then
+  if not sampIsCursorActive() then
     if not isEating and tonumber(satiety) == 0 then
       isEating = true
     elseif isEating and tonumber(satiety) >= 50 then
@@ -210,41 +215,85 @@ function doEating()
   end
 end
 
+function updateAnimalMarkers()
+  if not cfg.settings.animal_markers then return end
+  local objects = getAllObjects()
+  local seenObjects = {}
+  for _, handle in ipairs(objects) do
+    local model = getObjectModel(handle)
+    local objectId = sampGetObjectSampIdByHandle(handle)
+    if model == sampObject.deer or model == sampObject.cow then
+      seenObjects[objectId] = true
+      if not animalBlips[objectId] then
+        local _, x, y, z = getObjectCoordinates(handle)
+        local blip = addBlipForCoord(x, y, z)
+        changeBlipScale(blip, 1)
+        changeBlipColour(blip, 0xFF08ffe6)
+        animalBlips[objectId] = blip
+      end
+    end
+  end
+
+  for id, blipHandle in pairs(animalBlips) do
+    if not seenObjects[id] then
+      if doesBlipExist(blipHandle) then 
+        removeBlip(blipHandle) 
+      end
+      animalBlips[id] = nil
+    end
+  end
+end
+
+function selling()
+  if fishForSell.isSelling then
+    printStringNow("~y~Selling... Press ~b~~h~F1 ~y~to stop", 100)
+    if isKeyJustPressed(VK_F1) then
+      fishForSell = getInitialFishForSell()
+      cfg.settings.auto_sell = false
+      saveCFG(cfg, CONFIG_PATH)
+    end
+  end
+end
+
 ------------------------------------ Imgui  ------------------------------------
 function imgui.OnDrawFrame()
   local sw, sh = getScreenResolution()
   local window_width = 270
   local window_height = 400
 
-  local checkbox_sell_fish = imgui.ImBool(cfg.settings.sell_fish_helper)
+  local checkbox_sell_fish = imgui.ImBool(cfg.settings.auto_sell)
   local sell_treshold_in_perc = imgui.ImInt(cfg.settings.sell_treshold_in_perc)
-  local checkbox_informative_catching = imgui.ImBool(cfg.settings.informative_catching)
   local checkbox_pick_fish_net = imgui.ImBool(cfg.settings.pick_fish_net)
   local checkbox_hunting = imgui.ImBool(cfg.settings.hunting)
   local checkbox_grib_eat = imgui.ImBool(cfg.settings.grib_eat)
   local input_delay = imgui.ImInt(cfg.settings.clicker_delay)
+  local checkbox_animal_markers = imgui.ImBool(cfg.settings.animal_markers)
 
   imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
   imgui.SetNextWindowSize(imgui.ImVec2(window_width, window_height), imgui.Cond.FirstUseEver)
 
-  imgui.Begin("Fish helper by melvin-costra (vovka8101)", window, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove)
+  imgui.Begin("Fish helper by melvin-costra", window, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove)
 
   if imgui.Button(u8("Вкл/Выкл")) then toggleScriptActivation() end
   imgui.SameLine(150)
   imgui.TextColoredRGB("Статус: " .. (cfg.settings.enabled and "{00B200}Включен" or "{FF0F00}Выключен"))
   imgui.NewLine()
-  if imgui.Checkbox(u8("Помощник продажи"), checkbox_sell_fish) then cfg.settings.sell_fish_helper = checkbox_sell_fish.v saveCFG(cfg, CONFIG_PATH) end
+  if imgui.Checkbox(u8("Автоматическая продажа рыбы"), checkbox_sell_fish) then
+    cfg.settings.auto_sell = checkbox_sell_fish.v
+    fishForSell = getInitialFishForSell()
+    saveCFG(cfg, CONFIG_PATH)
+  end
   imgui.SameLine()
-  ShowHelpMarker("Сообщает о выгодной цене при продажи рыбы")
+  ShowHelpMarker("Начинает продавать рыбу при открытии диалога продажи")
   if checkbox_sell_fish.v then
-    if imgui.SliderInt(u8("%"), sell_treshold_in_perc, 0, 100) then cfg.settings.sell_treshold_in_perc = sell_treshold_in_perc.v saveCFG(cfg, CONFIG_PATH) end
+    if imgui.SliderInt(u8("%"), sell_treshold_in_perc, 0, 100) then
+      cfg.settings.sell_treshold_in_perc = sell_treshold_in_perc.v
+      fishForSell = getInitialFishForSell()
+      saveCFG(cfg, CONFIG_PATH)
+    end
     imgui.SameLine()
     ShowHelpMarker("% от максимальной цены")
   end
-  imgui.NewLine()
-  if imgui.Checkbox(u8("Информативные сообщения"), checkbox_informative_catching) then cfg.settings.informative_catching = checkbox_informative_catching.v saveCFG(cfg, CONFIG_PATH) end
-  imgui.SameLine()
-  ShowHelpMarker("Заменяет стандартное сообщение при ловле рыбы на более информативное")
   imgui.NewLine()
   if imgui.Checkbox(u8("Кликер для сетей"), checkbox_pick_fish_net) then cfg.settings.pick_fish_net = checkbox_pick_fish_net.v saveCFG(cfg, CONFIG_PATH) end
   imgui.SameLine()
@@ -253,6 +302,14 @@ function imgui.OnDrawFrame()
   if imgui.Checkbox(u8("Кликер для охоты"), checkbox_hunting) then cfg.settings.hunting = checkbox_hunting.v saveCFG(cfg, CONFIG_PATH) end
   imgui.SameLine()
   ShowHelpMarker("Автоматически кликает по точкам при свежевании животного")
+  imgui.NewLine()
+  if imgui.Checkbox(u8("Маркеры животных"), checkbox_animal_markers) then
+    cfg.settings.animal_markers = checkbox_animal_markers.v
+    removeAnimalBlips()
+    saveCFG(cfg, CONFIG_PATH)
+  end
+  imgui.SameLine()
+  ShowHelpMarker("Добавляет маркеры животных на миникарте")
   imgui.NewLine()
   if imgui.Checkbox(u8("Поедание грибов"), checkbox_grib_eat) then cfg.settings.grib_eat = checkbox_grib_eat.v saveCFG(cfg, CONFIG_PATH) end
   imgui.SameLine()
@@ -331,6 +388,8 @@ end
 ------------------------------------ Utils  ------------------------------------
 function toggleScriptActivation()
   cfg.settings.enabled = not cfg.settings.enabled
+  removeAnimalBlips()
+  fishForSell = getInitialFishForSell()
   saveCFG(cfg, CONFIG_PATH)
 end
 
@@ -346,7 +405,7 @@ end
 function showFishInfo()
   for key, value in pairs(cfg.fish) do
     local text = string.format("%s | {FF0F00}%s {FFFFFF}| {00B200}%s {FFFFFF}| %s | %s", key, value.min_price, value.max_price, value.location, value.time)
-    sampAddChatMessage(text, -1)
+    sendChatMessage(text)
   end
 end
 
@@ -365,7 +424,7 @@ function format_number(n)
   local formatted = tostring(n)
   local k
   while true do
-    formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1.%2")
+    formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1 %2")
     if k == 0 then break end
   end
   return formatted
@@ -399,6 +458,22 @@ function clickTextdraw(textdrawId)
     sampSendClickTextdraw(textdrawId)
     antiflood = os.clock() * 1000
 end
+
+function removeAnimalBlips()
+  for _, blipHandle in pairs(animalBlips) do
+    if doesBlipExist(blipHandle) then removeBlip(blipHandle) end
+  end
+  animalBlips = {}
+end
+
+function getInitialFishForSell()
+  return { name = nil, price = nil, amount = nil, isSelling = false }
+end
+
+function sendChatMessage(text)
+  sampAddChatMessage("{0088CC}[FH]: {FFFFFF}" .. text, -1)
+end
+
 ------------------------------------ Events  ------------------------------------
 function ev.onServerMessage(c, text)
   if text == " Не флуди!" or text == " В AFK ввод команд заблокирован" then
@@ -406,16 +481,6 @@ function ev.onServerMessage(c, text)
 	end
   if text == " У вас нет этой еды" then
     cfg.settings.grib_eat = false
-  end
-  if cfg.settings.enabled and cfg.settings.informative_catching then
-    local key, weight = text:match("Вы успешно поймали {6AB1FF}\"(.+)\"{FFFFFF}%. Масса: {6AB1FF}(%d+%.%d+)")
-    if key then
-      if cfg.fish[key] and weight then
-        text = "Поймано: {6AB1FF}\"" .. key .. "\" {FFFFFF}| Масса: {6AB1FF}" .. weight .. "{FFFFFF} кг. | " .. "Мин. цена: {FF0F00}" .. cfg.fish[key].min_price .. "{FFFFFF} | " .. "Макс. цена: {00B200}" .. cfg.fish[key].max_price .. "{FFFFFF}"
-        sampAddChatMessage(text, -1)
-        return false
-      end
-    end
   end
 end
 
@@ -436,34 +501,62 @@ function ev.onTextDrawSetString(id, text)
 end
 
 function ev.onShowDialog(id, style, title, btn1, btn2, text)
-  if cfg.settings.enabled and cfg.settings.sell_fish_helper and style == 5 and title:find('Рыболовные товары') then
-    local totalPrice = 0
-    for line in text:gmatch("[^\n]+") do
-      local raw_text = escape_string(line)
-      local name, price, amount = raw_text:match("([- А-Яа-яёЁ]+)\\t{6AB1FF}%$(%d+)\\t{FFFFFF}(%d+%.%d+)")
-      if name and price and amount then
-        amount = math.floor(amount)
-        price = tonumber(price)
-        if amount > 0 then
-          local min = cfg.fish[name].min_price
-          local max = cfg.fish[name].max_price
-          local percent_diff = ((price - min) / (max - min)) * 100
-          if percent_diff >= cfg.settings.sell_treshold_in_perc then
-            totalPrice = totalPrice + (price * amount)
-            sampAddChatMessage(name .. " | Цена: {6AB1FF}" .. price .. " {FFFFFF}| Макс. цена: {00B200}" .. cfg.fish[name].max_price .. " {FFFFFF}| Кол-во: {6AB1FF}" .. amount .. " {FFFFFF}| Сумма: {6AB1FF}" .. format_number(price * amount), -1)
-          end
-        end
-        if price > cfg.fish[name].max_price then
-          cfg.fish[name].max_price = price
-          saveCFG(cfg, CONFIG_PATH)
-        elseif price < cfg.fish[name].min_price then
-          cfg.fish[name].min_price = price
-          saveCFG(cfg, CONFIG_PATH)
-        end
+  if cfg.settings.enabled and cfg.settings.auto_sell then
+    if style == 0 and title:find("Продажа рыбы") then
+      if fishForSell.isSelling then
+        sampSendDialogResponse(id, 1, 0, "")
+        return false
       end
     end
-    if totalPrice > 0 then
-      sampAddChatMessage("Общая сумма: {6AB1FF}" .. format_number(totalPrice), -1)
+
+    if style == 1 and title:find("Продажа рыбы") then
+      if fishForSell.isSelling then
+        sampSendDialogResponse(id, 1, 1, fishForSell.amount)
+        return false
+      end
+    end
+
+    if style == 5 and title:find('Рыболовные товары') then
+      fishForSell = getInitialFishForSell()
+      local i = 0
+      for line in text:gmatch("[^\n]+") do
+        local raw_text = escape_string(line)
+        local name, price, amount = raw_text:match("([- А-Яа-яёЁ]+)\\t{6AB1FF}%$(%d+)\\t{FFFFFF}(%d+%.%d+)")
+        if name and price and amount then
+          amount = math.floor(amount)
+          price = tonumber(price)
+          -- Обновляем цены в конфиге
+          if price > cfg.fish[name].max_price then
+            cfg.fish[name].max_price = price
+            saveCFG(cfg, CONFIG_PATH)
+          elseif price < cfg.fish[name].min_price then
+            cfg.fish[name].min_price = price
+            saveCFG(cfg, CONFIG_PATH)
+          end
+          if amount > 0 then
+            local min = cfg.fish[name].min_price
+            local max = cfg.fish[name].max_price
+            local percent_diff = ((price - min) / (max - min)) * 100
+            if percent_diff >= cfg.settings.sell_treshold_in_perc then
+              fishForSell.name = name
+              fishForSell.price = price
+              fishForSell.amount = math.floor(amount)
+              fishForSell.isSelling = true
+              sampSendDialogResponse(id, 1, i, "")
+              break
+            end
+          end
+          i = i + 1
+        end
+      end
+      if not fishForSell.isSelling then
+        sendChatMessage("Нету рыбы соответствующей указаному порогу цены")
+      end
     end
   end
+end
+
+function onScriptTerminate()
+  removeAnimalBlips()
+  fishForSell = getInitialFishForSell()
 end
