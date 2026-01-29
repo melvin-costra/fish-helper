@@ -7,13 +7,19 @@ script_url("https://github.com/melvin-costra/fish-helper.git")
 local ev = require "samp.events"
 local imgui = require 'imgui'
 local encoding = require 'encoding'
+local memory = require 'memory'
 encoding.default = 'CP1251'
 u8 = encoding.UTF8
 require "lib.moonloader"
 
 ------------------------------------ Variables  ------------------------------------
-local window = imgui.ImBool(false)
 local CONFIG_PATH = "moonloader/config/configFish.json"
+local ORIG_WAVE_1 = 0x0A75
+local ORIG_WAVE_2 = 0x0424448B
+local NOWAVES_1 = 0x9090
+local NOWAVES_2 = 0x909090C3
+
+local window = imgui.ImBool(false)
 local catchingCoord = { x = 320, y = 100 }
 local satiety, antiflood = -1, os.clock() * 1000
 local isEating = false
@@ -21,6 +27,9 @@ local loc = { ocean = "Океан", lowland = "Равнинные реки", mountain = "Горные ре
 local sampObject = { deer = 19315, cow = 19833 }
 local animalBlips = {} -- [objectId] = blip
 local fishForSell = { name = nil, price = nil, amount = nil, isSelling = false }
+local addrWave1 = 0x6E968A -- size 2
+local addrWave2 = 0x6E7210 -- size 4
+local wavesApplied = nil
 
 ------------------------------------ Settings  ------------------------------------
 local cfg = {
@@ -56,6 +65,7 @@ local cfg = {
     animal_markers = true,
     grib_eat = true,
     clicker_delay = 200,
+    no_waves = false,
   }
 }
 
@@ -119,6 +129,7 @@ function main()
       eating()
       updateAnimalMarkers()
       selling()
+      toggleWaves()
     end
 	end
 end
@@ -202,7 +213,7 @@ function eating()
       isEating = false
     end
     if isEating then
-      printStringNow("~y~Eating... Press ~b~~h~R ~y~to stop", 100)
+      printStringNow("~y~Eating... Press ~b~~h~R ~y~to stop", 500)
       if isKeyJustPressed(VK_R) then
         isEating = false
         cfg.settings.grib_eat = false
@@ -246,20 +257,41 @@ end
 
 function selling()
   if fishForSell.isSelling then
-    printStringNow("~y~Selling... Press ~b~~h~F1 ~y~to stop", 100)
-    if isKeyJustPressed(VK_F1) then
+    printStringNow("~y~Selling... Press ~b~~h~R ~y~to stop", 500)
+    if isKeyJustPressed(VK_R) then
       fishForSell = getInitialFishForSell()
       cfg.settings.auto_sell = false
       saveCFG(cfg, CONFIG_PATH)
+      printStringNow("", 10)
     end
   end
+end
+
+function toggleWaves()
+  if not cfg.settings.enabled then return end
+
+  local wantNoWaves = cfg.settings.no_waves
+
+  if wavesApplied == wantNoWaves then
+    return
+  end
+
+  if wantNoWaves then
+    memory.write(addrWave1, NOWAVES_1, 2, false)
+    memory.write(addrWave2, NOWAVES_2, 4, false)
+  else
+    memory.write(addrWave1, ORIG_WAVE_1, 2, false)
+    memory.write(addrWave2, ORIG_WAVE_2, 4, false)
+  end
+
+  wavesApplied = wantNoWaves
 end
 
 ------------------------------------ Imgui  ------------------------------------
 function imgui.OnDrawFrame()
   local sw, sh = getScreenResolution()
   local window_width = 270
-  local window_height = 400
+  local window_height = 440
 
   local checkbox_sell_fish = imgui.ImBool(cfg.settings.auto_sell)
   local sell_treshold_in_perc = imgui.ImInt(cfg.settings.sell_treshold_in_perc)
@@ -268,6 +300,7 @@ function imgui.OnDrawFrame()
   local checkbox_grib_eat = imgui.ImBool(cfg.settings.grib_eat)
   local input_delay = imgui.ImInt(cfg.settings.clicker_delay)
   local checkbox_animal_markers = imgui.ImBool(cfg.settings.animal_markers)
+  local checkbox_no_waves = imgui.ImBool(cfg.settings.no_waves)
 
   imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
   imgui.SetNextWindowSize(imgui.ImVec2(window_width, window_height), imgui.Cond.FirstUseEver)
@@ -294,6 +327,10 @@ function imgui.OnDrawFrame()
     imgui.SameLine()
     ShowHelpMarker("% от максимальной цены")
   end
+  imgui.NewLine()
+  if imgui.Checkbox(u8("Убрать волны"), checkbox_no_waves) then cfg.settings.no_waves = checkbox_no_waves.v saveCFG(cfg, CONFIG_PATH) end
+  imgui.SameLine()
+  ShowHelpMarker("Убирает волны в океане чтобы не было тряски лодки")
   imgui.NewLine()
   if imgui.Checkbox(u8("Кликер для сетей"), checkbox_pick_fish_net) then cfg.settings.pick_fish_net = checkbox_pick_fish_net.v saveCFG(cfg, CONFIG_PATH) end
   imgui.SameLine()
@@ -388,9 +425,9 @@ end
 ------------------------------------ Utils  ------------------------------------
 function toggleScriptActivation()
   cfg.settings.enabled = not cfg.settings.enabled
-  removeAnimalBlips()
-  fishForSell = getInitialFishForSell()
   saveCFG(cfg, CONFIG_PATH)
+  fishForSell = getInitialFishForSell()
+  removeAnimalBlips()
 end
 
 function sendKey(key)
@@ -432,8 +469,8 @@ end
 
 function onWindowMessage(m, p)
   if p == VK_ESCAPE and window.v then
-      consumeWindowMessage()
-      window.v = false
+    consumeWindowMessage()
+    window.v = false
   end
 end
 
@@ -455,8 +492,8 @@ function escape_string(str)
 end
 
 function clickTextdraw(textdrawId)
-    sampSendClickTextdraw(textdrawId)
-    antiflood = os.clock() * 1000
+  sampSendClickTextdraw(textdrawId)
+  antiflood = os.clock() * 1000
 end
 
 function removeAnimalBlips()
@@ -518,11 +555,13 @@ function ev.onShowDialog(id, style, title, btn1, btn2, text)
 
     if style == 5 and title:find('Рыболовные товары') then
       fishForSell = getInitialFishForSell()
+      local isSellingWindow = false
       local i = 0
       for line in text:gmatch("[^\n]+") do
         local raw_text = escape_string(line)
         local name, price, amount = raw_text:match("([- А-Яа-яёЁ]+)\\t{6AB1FF}%$(%d+)\\t{FFFFFF}(%d+%.%d+)")
         if name and price and amount then
+          isSellingWindow = true
           amount = math.floor(amount)
           price = tonumber(price)
           -- Обновляем цены в конфиге
@@ -549,7 +588,7 @@ function ev.onShowDialog(id, style, title, btn1, btn2, text)
           i = i + 1
         end
       end
-      if not fishForSell.isSelling then
+      if isSellingWindow and not fishForSell.isSelling then
         sendChatMessage("Нету рыбы соответствующей указаному порогу цены")
       end
     end
@@ -557,6 +596,6 @@ function ev.onShowDialog(id, style, title, btn1, btn2, text)
 end
 
 function onScriptTerminate()
-  removeAnimalBlips()
   fishForSell = getInitialFishForSell()
+  removeAnimalBlips()
 end
