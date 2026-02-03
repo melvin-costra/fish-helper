@@ -1,6 +1,6 @@
 script_author("melvin-costra")
 script_name("Fish helper")
-script_version("27.01.2026")
+script_version("3.02.2026")
 script_url("https://github.com/melvin-costra/fish-helper.git")
 
 ------------------------------------ Libs  ------------------------------------
@@ -30,6 +30,8 @@ local fishForSell = { name = nil, price = nil, amount = nil, isSelling = false }
 local addrWave1 = 0x6E968A -- size 2
 local addrWave2 = 0x6E7210 -- size 4
 local wavesApplied = nil
+local isEquipping = false
+local equipIndex = 0
 
 ------------------------------------ Settings  ------------------------------------
 local cfg = {
@@ -120,6 +122,15 @@ function main()
 	sampRegisterChatCommand("fh", function()
     window.v = not window.v
   end)
+	sampRegisterChatCommand("fe", function()
+    if getActiveInterior() ~= 0 or not isCharOnFoot(PLAYER_PED) then
+      sendChatMessage("Нельзя оснащать удочку в интерьере, в машине или в вирт. мире")
+      return
+    end
+    isEquipping = true
+    equipIndex = 0
+    sampSendChat("/fish equip")
+  end)
 
 	while true do
 		wait(0)
@@ -130,6 +141,7 @@ function main()
       updateAnimalMarkers()
       selling()
       toggleWaves()
+      equipping()
     end
 	end
 end
@@ -213,7 +225,7 @@ function eating()
       isEating = false
     end
     if isEating then
-      printStringNow("~y~Eating... Press ~b~~h~R ~y~to stop", 500)
+      printStringNow("~y~Eating... Press ~b~~h~R ~y~to stop", 300)
       if isKeyJustPressed(VK_R) then
         isEating = false
         cfg.settings.grib_eat = false
@@ -285,6 +297,16 @@ function toggleWaves()
   end
 
   wavesApplied = wantNoWaves
+end
+
+function equipping()
+  if isEquipping then
+    printStringNow("~y~Equipping... Press ~b~~h~R ~y~to stop", 300)
+    if isKeyJustPressed(VK_R) then
+      isEquipping = false
+      printStringNow("", 10)
+    end
+  end
 end
 
 ------------------------------------ Imgui  ------------------------------------
@@ -519,6 +541,37 @@ function ev.onServerMessage(c, text)
   if text == " У вас нет этой еды" then
     cfg.settings.grib_eat = false
   end
+
+  if cfg.settings.enabled then
+    if isEquipping then
+      if text == " [Рыбалка] {FFFFFF}Необходимо покинуть помещение" then
+        isEquipping = false
+      elseif text == " [Рыбалка] {FFFFFF}У вас отсутствуют удочки" then
+        isEquipping = false
+      elseif text == " [Рыбалка] {FFFFFF}У вас отсутствуют снасти" then
+        equipIndex = equipIndex + 1
+        sampSendChat("/fish equip")
+      elseif text == " [Рыбалка] {FFFFFF}У вас отсутствуют наживки" then
+        isEquipping = false
+        sendKey(1024)
+      elseif text == " [Рыбалка] {FFFFFF}Установка снастей доступна только на Иридиевую удочку"
+      or text == " [Рыбалка] {FFFFFF}Для использования наживки необходимо экипировать Стеклопластиковую удочку (или лучше)"
+      then
+        equipIndex = equipIndex + 1
+      end
+    end
+
+    if text == " [Рыбалка] {FFFFFF}У вас сломалась удочка"
+    or text == " [Рыбалка] {FFFFFF}У вас сломалась снасть"
+    or text == " [Рыбалка] {FFFFFF}У вас сломалась наживка"
+    then
+      if not isEquipping then
+        isEquipping = true
+        equipIndex = 0
+        sampSendChat("/fish equip")
+      end
+    end
+  end
 end
 
 function ev.onSendChat(text)
@@ -538,58 +591,105 @@ function ev.onTextDrawSetString(id, text)
 end
 
 function ev.onShowDialog(id, style, title, btn1, btn2, text)
-  if cfg.settings.enabled and cfg.settings.auto_sell then
-    if style == 0 and title:find("Продажа рыбы") then
-      if fishForSell.isSelling then
-        sampSendDialogResponse(id, 1, 0, "")
-        return false
-      end
-    end
-
-    if style == 1 and title:find("Продажа рыбы") then
-      if fishForSell.isSelling then
-        sampSendDialogResponse(id, 1, 1, fishForSell.amount)
-        return false
-      end
-    end
-
-    if style == 5 and title:find('Рыболовные товары') then
-      fishForSell = getInitialFishForSell()
-      local isSellingWindow = false
-      local i = 0
-      for line in text:gmatch("[^\n]+") do
-        local raw_text = escape_string(line)
-        local name, price, amount = raw_text:match("([- А-Яа-яёЁ]+)\\t{6AB1FF}%$(%d+)\\t{FFFFFF}(%d+%.%d+)")
-        if name and price and amount then
-          isSellingWindow = true
-          amount = math.floor(amount)
-          price = tonumber(price)
-          -- Обновляем цены в конфиге
-          if price > cfg.fish[name].max_price then
-            cfg.fish[name].max_price = price
-            saveCFG(cfg, CONFIG_PATH)
-          elseif price < cfg.fish[name].min_price then
-            cfg.fish[name].min_price = price
-            saveCFG(cfg, CONFIG_PATH)
-          end
-          if amount > 0 then
-            local min = cfg.fish[name].min_price
-            local max = cfg.fish[name].max_price
-            local percent_diff = ((price - min) / (max - min)) * 100
-            if percent_diff >= cfg.settings.sell_treshold_in_perc then
-              fishForSell.name = name
-              fishForSell.price = price
-              fishForSell.amount = math.floor(amount)
-              fishForSell.isSelling = true
-              sampSendDialogResponse(id, 1, i, "")
-              break
-            end
-          end
-          i = i + 1
+  if cfg.settings.enabled then
+    if cfg.settings.auto_sell then
+      if style == 0 and title:find("Продажа рыбы") then
+        if fishForSell.isSelling then
+          sampSendDialogResponse(id, 1, 0, "")
+          return false
         end
       end
-      if isSellingWindow and not fishForSell.isSelling then
-        sendChatMessage("Нету рыбы соответствующей указаному порогу цены")
+  
+      if style == 1 and title:find("Продажа рыбы") then
+        if fishForSell.isSelling then
+          sampSendDialogResponse(id, 1, 1, fishForSell.amount)
+          return false
+        end
+      end
+  
+      if style == 5 and title:find('Рыболовные товары') then
+        fishForSell = getInitialFishForSell()
+        local isSellingWindow = false
+        local formattedText = text:match("[^\n]+")
+        local i = 0
+        for line in text:gmatch("[^\n]+") do
+          local raw_text = escape_string(line)
+          local name, price, amount = raw_text:match("([- А-Яа-яёЁ]+)\\t{6AB1FF}%$(%d+)\\t{FFFFFF}(%d+%.%d+)")
+          if name and price and amount then
+            formattedText = formattedText .. "\n" .. name .. "\t{6AB1FF}$" .. price .. "{FFFFFF} | {00B200}$" .. cfg.fish[name].max_price .. "\t{FFFFFF}" .. amount
+            isSellingWindow = true
+            amount = math.floor(amount)
+            price = tonumber(price)
+            -- Обновляем цены в конфиге
+            if price > cfg.fish[name].max_price then
+              cfg.fish[name].max_price = price
+              saveCFG(cfg, CONFIG_PATH)
+            elseif price < cfg.fish[name].min_price then
+              cfg.fish[name].min_price = price
+              saveCFG(cfg, CONFIG_PATH)
+            end
+            if amount > 0 then
+              local min = cfg.fish[name].min_price
+              local max = cfg.fish[name].max_price
+              local percent_diff = ((price - min) / (max - min)) * 100
+              if percent_diff >= cfg.settings.sell_treshold_in_perc then
+                fishForSell.name = name
+                fishForSell.price = price
+                fishForSell.amount = math.floor(amount)
+                fishForSell.isSelling = true
+                sampSendDialogResponse(id, 1, i, "")
+                break
+              end
+            end
+            i = i + 1
+          end
+        end
+        if isSellingWindow then
+          if not fishForSell.isSelling then
+            sendChatMessage("Нету рыбы соответствующей указаному ценовому порогу")
+          end
+          sampShowDialog(id, title, formattedText, btn1, btn2, style)
+          sampSetDialogClientside(false)
+          return false
+        end
+      end
+    end
+
+    if isEquipping then
+      if style == 4 then
+        if title:find("Экипировка {6AB1FF}| Рыбалка") then
+          local isEquipped = true
+          local i = 0
+          for line in text:gmatch("[^\n]+") do
+            if i >= equipIndex then
+              local name, value = line:match("(.+)\t{FFFFFF}(.+)")
+              if name and value then
+                if value:find("Не выбрано") then
+                  sampSendDialogResponse(id, 1, i, "")
+                  isEquipped = false
+                  equipIndex = i
+                  break
+                end
+              end
+            end
+            i = i + 1
+          end
+          if isEquipped then
+            isEquipping = false
+            sendKey(1024)
+            return false
+          end
+        elseif title:find("Список удочек {6AB1FF}| Рыбалка")
+        or title:find("Список снастей {6AB1FF}| Рыбалка")
+        or title:find("Список наживок {6AB1FF}| Рыбалка") then
+          local i = 0
+          for _ in text:gmatch("[^\n]+") do
+            i = i + 1
+          end
+          sampSendDialogResponse(id, 1, i - 1, "")
+        end
+
+        return false
       end
     end
   end
