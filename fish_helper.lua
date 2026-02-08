@@ -1,6 +1,6 @@
 script_author("melvin-costra")
 script_name("Fish helper")
-script_version("3.02.2026")
+script_version("08.02.2026")
 script_url("https://github.com/melvin-costra/fish-helper.git")
 
 ------------------------------------ Libs  ------------------------------------
@@ -22,7 +22,7 @@ local NOWAVES_2 = 0x909090C3
 local window = imgui.ImBool(false)
 local catchingCoord = { x = 320, y = 100 }
 local satiety, antiflood = -1, os.clock() * 1000
-local isEating = false
+local isEating, isEquipping, isNetting = false, false, false
 local loc = { ocean = "Океан", lowland = "Равнинные реки", mountain = "Горные реки" }
 local sampObject = { deer = 19315, cow = 19833 }
 local animalBlips = {} -- [objectId] = blip
@@ -30,8 +30,8 @@ local fishForSell = { name = nil, price = nil, amount = nil, isSelling = false }
 local addrWave1 = 0x6E968A -- size 2
 local addrWave2 = 0x6E7210 -- size 4
 local wavesApplied = nil
-local isEquipping = false
 local equipIndex = 0
+local commandStates = {}
 
 ------------------------------------ Settings  ------------------------------------
 local cfg = {
@@ -93,10 +93,10 @@ function checkSavedCFG(savedCFG)
   return count1 == count2
 end
 
-function saveCFG(table, path)
-  local save = io.open(path, "w")
+function saveCFG()
+  local save = io.open(CONFIG_PATH, "w")
   if save then
-    save:write(encodeJson(table))
+    save:write(encodeJson(cfg))
     save:close()
   end
 end
@@ -107,7 +107,7 @@ function main()
 	while not isSampAvailable() do wait(100) end
   if not doesDirectoryExist('moonloader/config') then createDirectory("moonloader/config") end
   if not doesFileExist(CONFIG_PATH) then
-    saveCFG(cfg, CONFIG_PATH)
+    saveCFG()
   else
     local file = io.open(CONFIG_PATH, 'r')
     if file then
@@ -129,7 +129,15 @@ function main()
     end
     isEquipping = true
     equipIndex = 0
-    sampSendChat("/fish equip")
+    sendCommand("/fish equip")
+  end)
+  sampRegisterChatCommand("fn", function()
+    if getActiveInterior() ~= 0 or not isCharInWater(PLAYER_PED) then
+      sendChatMessage("Установка сетей доступна только в воде в игровом мире")
+      return
+    end
+    isNetting = true
+    sendCommand("/fish net")
   end)
 
 	while true do
@@ -142,6 +150,7 @@ function main()
       selling()
       toggleWaves()
       equipping()
+      netting()
     end
 	end
 end
@@ -230,6 +239,7 @@ function eating()
         isEating = false
         cfg.settings.grib_eat = false
         printStringNow("", 10)
+        saveCFG()
       end
       if (os.clock() * 1000) - antiflood > 1000 then
         sampSendChat("/grib eat")
@@ -273,7 +283,7 @@ function selling()
     if isKeyJustPressed(VK_R) then
       fishForSell = getInitialFishForSell()
       cfg.settings.auto_sell = false
-      saveCFG(cfg, CONFIG_PATH)
+      saveCFG()
       printStringNow("", 10)
     end
   end
@@ -304,6 +314,18 @@ function equipping()
     printStringNow("~y~Equipping... Press ~b~~h~R ~y~to stop", 300)
     if isKeyJustPressed(VK_R) then
       isEquipping = false
+      commandStates["/fish equip"] = nil
+      printStringNow("", 10)
+    end
+  end
+end
+
+function netting()
+  if isNetting then
+    printStringNow("~y~Netting... Press ~b~~h~R ~y~to stop", 300)
+    if isKeyJustPressed(VK_R) then
+      isNetting = false
+      commandStates["/fish net"] = nil
       printStringNow("", 10)
     end
   end
@@ -312,7 +334,7 @@ end
 ------------------------------------ Imgui  ------------------------------------
 function imgui.OnDrawFrame()
   local sw, sh = getScreenResolution()
-  local window_width = 270
+  local window_width = 280
   local window_height = 440
 
   local checkbox_sell_fish = imgui.ImBool(cfg.settings.auto_sell)
@@ -327,16 +349,19 @@ function imgui.OnDrawFrame()
   imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
   imgui.SetNextWindowSize(imgui.ImVec2(window_width, window_height), imgui.Cond.FirstUseEver)
 
-  imgui.Begin("Fish helper by melvin-costra", window, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove)
+  imgui.Begin("Fish helper by melvin-costra", window, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse)
 
   if imgui.Button(u8("Вкл/Выкл")) then toggleScriptActivation() end
   imgui.SameLine(150)
   imgui.TextColoredRGB("Статус: " .. (cfg.settings.enabled and "{00B200}Включен" or "{FF0F00}Выключен"))
   imgui.NewLine()
+  imgui.Text(u8("/fe - начать рыбалку"))
+  imgui.Text(u8("/fn - установить сеть (на 24 часа)"))
+  imgui.NewLine()
   if imgui.Checkbox(u8("Автоматическая продажа рыбы"), checkbox_sell_fish) then
     cfg.settings.auto_sell = checkbox_sell_fish.v
     fishForSell = getInitialFishForSell()
-    saveCFG(cfg, CONFIG_PATH)
+    saveCFG()
   end
   imgui.SameLine()
   ShowHelpMarker("Начинает продавать рыбу при открытии диалога продажи")
@@ -344,33 +369,33 @@ function imgui.OnDrawFrame()
     if imgui.SliderInt(u8("%"), sell_treshold_in_perc, 0, 100) then
       cfg.settings.sell_treshold_in_perc = sell_treshold_in_perc.v
       fishForSell = getInitialFishForSell()
-      saveCFG(cfg, CONFIG_PATH)
+      saveCFG()
     end
     imgui.SameLine()
     ShowHelpMarker("% от максимальной цены")
   end
   imgui.NewLine()
-  if imgui.Checkbox(u8("Убрать волны"), checkbox_no_waves) then cfg.settings.no_waves = checkbox_no_waves.v saveCFG(cfg, CONFIG_PATH) end
+  if imgui.Checkbox(u8("Убрать волны"), checkbox_no_waves) then cfg.settings.no_waves = checkbox_no_waves.v saveCFG() end
   imgui.SameLine()
   ShowHelpMarker("Убирает волны в океане чтобы не было тряски лодки")
   imgui.NewLine()
-  if imgui.Checkbox(u8("Кликер для сетей"), checkbox_pick_fish_net) then cfg.settings.pick_fish_net = checkbox_pick_fish_net.v saveCFG(cfg, CONFIG_PATH) end
+  if imgui.Checkbox(u8("Кликер для сетей"), checkbox_pick_fish_net) then cfg.settings.pick_fish_net = checkbox_pick_fish_net.v saveCFG() end
   imgui.SameLine()
   ShowHelpMarker("Автоматически кликает по рыбе при сборе сетей")
   imgui.NewLine()
-  if imgui.Checkbox(u8("Кликер для охоты"), checkbox_hunting) then cfg.settings.hunting = checkbox_hunting.v saveCFG(cfg, CONFIG_PATH) end
+  if imgui.Checkbox(u8("Кликер для охоты"), checkbox_hunting) then cfg.settings.hunting = checkbox_hunting.v saveCFG() end
   imgui.SameLine()
   ShowHelpMarker("Автоматически кликает по точкам при свежевании животного")
   imgui.NewLine()
   if imgui.Checkbox(u8("Маркеры животных"), checkbox_animal_markers) then
     cfg.settings.animal_markers = checkbox_animal_markers.v
     removeAnimalBlips()
-    saveCFG(cfg, CONFIG_PATH)
+    saveCFG()
   end
   imgui.SameLine()
   ShowHelpMarker("Добавляет маркеры животных на миникарте")
   imgui.NewLine()
-  if imgui.Checkbox(u8("Поедание грибов"), checkbox_grib_eat) then cfg.settings.grib_eat = checkbox_grib_eat.v saveCFG(cfg, CONFIG_PATH) end
+  if imgui.Checkbox(u8("Поедание грибов"), checkbox_grib_eat) then cfg.settings.grib_eat = checkbox_grib_eat.v saveCFG() end
   imgui.SameLine()
   ShowHelpMarker("Автоматически кушает грибы когда сытность = 0")
   imgui.NewLine()
@@ -378,10 +403,16 @@ function imgui.OnDrawFrame()
   imgui.Separator()
   imgui.NewLine()
   imgui.PushItemWidth(100)
-  if imgui.InputInt(u8"Задержка кликеров (мс)", input_delay, 50) then cfg.settings.clicker_delay = input_delay.v saveCFG(cfg, CONFIG_PATH) end
+  if imgui.InputInt(u8"Задержка кликеров (мс)", input_delay, 50) then cfg.settings.clicker_delay = input_delay.v saveCFG() end
   imgui.PopItemWidth()
   imgui.NewLine()
   if imgui.Button(u8("Информация о рыбе")) then showFishInfo() end
+  imgui.SameLine()
+  imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.14, 0.63, 0.87, 1.0))
+  imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.18, 0.70, 0.95, 1.0))
+  imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(0.10, 0.55, 0.80, 1.0))
+  if imgui.Button(u8("Телеграм канал")) then os.execute('explorer "https://t.me/melvin_costra"') end
+  imgui.PopStyleColor(3)
 
   imgui.End()
 end
@@ -447,9 +478,10 @@ end
 ------------------------------------ Utils  ------------------------------------
 function toggleScriptActivation()
   cfg.settings.enabled = not cfg.settings.enabled
-  saveCFG(cfg, CONFIG_PATH)
+  saveCFG()
   fishForSell = getInitialFishForSell()
   removeAnimalBlips()
+  commandStates = {}
 end
 
 function sendKey(key)
@@ -459,6 +491,22 @@ function sendKey(key)
   setStructElement(data, 4, 2, key, false)
   sampSendOnfootData(data)
   freeMemory(data)
+end
+
+function sendCommand(cmd)
+  if commandStates[cmd] then
+    return
+  end
+  commandStates[cmd] = true
+  lua_thread.create(function()
+    repeat
+      wait(0)
+      if os.clock() * 1000 - antiflood > 500 then
+        sampSendChat(cmd)
+        antiflood = os.clock() * 1000
+      end
+    until not commandStates[cmd]
+  end)
 end
 
 function showFishInfo()
@@ -550,7 +598,7 @@ function ev.onServerMessage(c, text)
         isEquipping = false
       elseif text == " [Рыбалка] {FFFFFF}У вас отсутствуют снасти" then
         equipIndex = equipIndex + 1
-        sampSendChat("/fish equip")
+        sendCommand("/fish equip")
       elseif text == " [Рыбалка] {FFFFFF}У вас отсутствуют наживки" then
         isEquipping = false
         sendKey(1024)
@@ -568,7 +616,13 @@ function ev.onServerMessage(c, text)
       if not isEquipping then
         isEquipping = true
         equipIndex = 0
-        sampSendChat("/fish equip")
+        sendCommand("/fish equip")
+      end
+    end
+
+    if isNetting then
+      if text == " [Рыбалка] {FFFFFF}У вас уже установлено максимальное число сетей" then
+        isNetting = false
       end
     end
   end
@@ -623,10 +677,10 @@ function ev.onShowDialog(id, style, title, btn1, btn2, text)
             -- Обновляем цены в конфиге
             if price > cfg.fish[name].max_price then
               cfg.fish[name].max_price = price
-              saveCFG(cfg, CONFIG_PATH)
+              saveCFG()
             elseif price < cfg.fish[name].min_price then
               cfg.fish[name].min_price = price
-              saveCFG(cfg, CONFIG_PATH)
+              saveCFG()
             end
             if amount > 0 then
               local min = cfg.fish[name].min_price
@@ -658,6 +712,7 @@ function ev.onShowDialog(id, style, title, btn1, btn2, text)
     if isEquipping then
       if style == 4 then
         if title:find("Экипировка {6AB1FF}| Рыбалка") then
+          commandStates["/fish equip"] = nil
           local isEquipped = true
           local i = 0
           for line in text:gmatch("[^\n]+") do
@@ -692,10 +747,37 @@ function ev.onShowDialog(id, style, title, btn1, btn2, text)
         return false
       end
     end
+
+    if isNetting then
+      if style == 2 then
+        if title == "{FFFFFF} Меню {6AB1FF}| Рыболовные сети" then
+          commandStates["/fish net"] = nil
+          local amount = text:match("[^\n].+В наличии: (%d+)")
+          if amount and tonumber(amount) > 0 then
+            sampSendDialogResponse(id, 1, 0, "")
+          else
+            isNetting = false
+            sendChatMessage("У тебя нету рыболовных сетей")
+          end
+          return false
+        end
+        
+        if title == "{FFFFFF} Установка сети {6AB1FF}| Рыболовные сети" then
+          local i = 0
+          for _ in text:gmatch("[^\n]+") do
+            i = i + 1
+          end
+          sampSendDialogResponse(id, 1, i - 1, "")
+          isNetting = false
+          return false
+        end
+      end
+    end
   end
 end
 
 function onScriptTerminate()
   fishForSell = getInitialFishForSell()
+  commandStates = {}
   removeAnimalBlips()
 end
