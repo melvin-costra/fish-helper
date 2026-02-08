@@ -123,6 +123,7 @@ function main()
     window.v = not window.v
   end)
 	sampRegisterChatCommand("fe", function()
+    if not cfg.settings.enabled then return end
     if getActiveInterior() ~= 0 or not isCharOnFoot(PLAYER_PED) then
       sendChatMessage("Нельзя оснащать удочку в интерьере, в машине или в вирт. мире")
       return
@@ -132,6 +133,7 @@ function main()
     sendCommand("/fish equip")
   end)
   sampRegisterChatCommand("fn", function()
+    if not cfg.settings.enabled then return end
     if getActiveInterior() ~= 0 or not isCharInWater(PLAYER_PED) then
       sendChatMessage("Установка сетей доступна только в воде в игровом мире")
       return
