@@ -1,7 +1,0 @@
-{
-  "editor.insertSpaces": true,
-  "editor.indentSize": 4,
-  "[lua]": {
-    "files.encoding": "windows1251"
-  }
-}
